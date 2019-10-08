@@ -25,6 +25,8 @@ char sendBuff[SIZE];
 int temp;
 map< string, string> user;
 map< string, int > user_active;
+map< int, string > user_active_inverse;
+
 pthread_mutex_t lck;
 
 void initialization()
@@ -77,12 +79,15 @@ void login(string userid, string pass, int i)
 {
 	if( user.find(userid) != user.end() && (pass.compare(user[userid]))==0 )
 	{
+		//username = userid;
 		user_active.insert(make_pair(userid, connfd[i]));
-		strcpy(sendBuff, "Login Successfull");
+		user_active_inverse.insert(make_pair(connfd[i], userid));
+		
+		strcpy(sendBuff, "Login Successfull\n");
 	}
 	else
 	{
-		strcpy(sendBuff, "Invalid Login Details");
+		strcpy(sendBuff, "Invalid Login Details\n");
 	}
 	//cout<<sendBuff<<"\n";
 	write(connfd[i], sendBuff, SIZE);
@@ -120,7 +125,7 @@ void *readd(void *parameter)
 			ptr = strtok(NULL, delim);
 			pass = string(ptr);
 			//cout<<userid<<" "<<pass<<"\n";
-			fout<<userid<<" "<<pass;
+			fout << userid << " " << pass;
 			user.insert(make_pair(userid, pass));
 		}
 		else if(strcmp(ptr, "create_group") == 0)
@@ -136,12 +141,44 @@ void *readd(void *parameter)
     		if(f.good())
 			{
 				//cout<<"Already Exist"<<"\n";
-				strcpy(sendBuff, "Group Already Exist");
+				strcpy(sendBuff, "Group Already Exist\n");
 				write(connfd[i], sendBuff, SIZE);
 			}
 			else
 			{
 				//cout<<"New Group"<<"\n";
+				ofstream fout;
+				fout.open(gid.c_str());
+				fout << user_active_inverse[connfd[i]] << "\n";
+				strcpy(sendBuff, "Group Created\n");
+				write(connfd[i], sendBuff, SIZE);
+				fout.close();
+			}
+		}
+		else if(strcmp(ptr, "join_group") == 0)
+		{
+			string gid = ".group/";
+			ptr = strtok(NULL, delim);
+			gid += string(ptr);
+			struct stat buffer;
+			gid = gid.substr(0, gid.size()-1);
+			
+			//cout<<gid<<" "<<gid.size()<<"\n";
+			ifstream f(gid.c_str());
+    		if(f.good())
+			{
+				//cout<<"Group Exist"<<"\n";
+				ofstream fout;
+				fout.open(gid.c_str(), ios::app);
+				fout << user_active_inverse[connfd[i]] << "\n";
+				strcpy(sendBuff, "Group Joined\n");
+				write(connfd[i], sendBuff, SIZE);
+			}
+			else
+			{
+				//cout<<"No Group"<<"\n";
+				strcpy(sendBuff, "No Group Exist\n");
+				write(connfd[i], sendBuff, SIZE);
 				
 			}
 		}

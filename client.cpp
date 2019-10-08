@@ -95,14 +95,13 @@ void *writee(void *arg)
 	{
 		//printf("%s: ",username);
 		fgets(sendBuff, 512, stdin);
+		write(sockfd,sendBuff,SIZE);
+			
 		ptr = strtok(sendBuff, delim);
 		//printf("%s\n", ptr);
 		
 		if(strcmp(ptr, "login") == 0 )
 		{
-			write(sockfd,sendBuff,SIZE);
-			read(sockfd,recvBuff,SIZE);
-			printf("server: %s\n",recvBuff);
 			if( strcmp(recvBuff, "Login Successfull") == 0 )
 			{
 				ptr = strtok(NULL, delim);
@@ -115,11 +114,12 @@ void *writee(void *arg)
 			{
 				cout<<"Login Required\n";
 			}
-			else
+		}
+		else if(strcmp(ptr, "join_group") == 0)
+		{
+			if( username.compare("client") == 0 )
 			{
-				write(sockfd,sendBuff,SIZE);
-				read(sockfd,recvBuff,SIZE);
-				printf("server: %s\n",recvBuff);
+				cout<<"Login Required\n";
 			}
 		}
 		else if(strcmp(ptr, "upload") == 0 )
