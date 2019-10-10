@@ -196,13 +196,13 @@ void *readd(void *parameter)
 			ifstream fin("tracker_info.txt");
 			string str, tmp, x;
 			string username = user_active_inverse[connfd[i]];
-			cout << username << "\n";
+			//cout << username << "\n";
 			while(fin)
 			{
 				getline(fin, str);
 				tmp="";
 				bool f = false;
-				cout << str << "\n";
+				//cout << str << "\n";
 				for(int i=0; i<str.size(); i++)
 				{
 					if(str[i]!=' ')
@@ -220,7 +220,8 @@ void *readd(void *parameter)
 				}
 				if(f)
 				{
-					sprintf(sendBuff, "PORT %s\n", tmp);
+					cout<<tmp<<"\n";
+					sprintf(sendBuff, "PORT %s\n", tmp.c_str());
 					break;
 				}
 			}
