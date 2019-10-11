@@ -24,6 +24,7 @@ char sendBuff[SIZE];
 pthread_t thread1,thread2, thread3;
 string username = "user";
 char *ip = "127.0.0.1";
+string filetosend, destfile;
 
 void *clientToTracker(void *);
 void *clientToClient(void *);
@@ -36,7 +37,7 @@ void *readd(void *arg)
 	{
 		read(sockfd,recvBuff,SIZE);
 		printf("server: %s",recvBuff);
-		getchar();
+		//getchar();
 		ptr = strtok(recvBuff, delim);
 		if( strcmp(ptr, "Login") == 0 )
 		{
@@ -52,16 +53,23 @@ void *readd(void *arg)
 			ptr = strtok(NULL, delim);
 			int port = atoi(ptr);
 			
-			pthread_attr_t custom3;
+			pthread_attr_t attr;
 			pthread_t thread4;
-			pthread_attr_init(&custom3);
+			pthread_attr_init(&attr);
 			
 			int *parameter = (int *)malloc(sizeof(int));
 			parameter[0] = port;
 				
-			pthread_create(&thread4,&custom3,clientToClient,(void *)parameter);
-			pthread_join(thread4,NULL);
+			pthread_create(&thread4 ,&attr, clientToClient, (void *)parameter);
+			pthread_join(thread4, NULL);
     
+		}
+		else if( strcmp(ptr, "FILE") == 0 )
+		{
+			ptr = strtok(NULL, delim);
+			filetosend = string(ptr);
+			filetosend = filetosend.substr(0, filetosend.size()-1);
+			cout << filetosend << "\n";
 		}
 		memset(sendBuff, '\0', SIZE);
 		memset(recvBuff, '\0', SIZE);
@@ -76,7 +84,7 @@ void *writee(void *arg)
 	{
 		//printf("%s: ",username);
 		fgets(sendBuff, 512, stdin);
-		write(sockfd,sendBuff,SIZE);
+		write(sockfd, sendBuff, SIZE);
 			
 		ptr = strtok(sendBuff, delim);
 		//printf("%s\n", ptr);
@@ -86,49 +94,51 @@ void *writee(void *arg)
 			ptr = strtok(NULL, delim);
 			username = string(ptr);
 		}
-		else if(strcmp(ptr, "create_group") == 0)
+		else if(strcmp(ptr, "download_file") == 0)
 		{
-			if( username.compare("user") == 0 )
-			{
-				cout<<"Login Required\n";
-			}
-		}
-		else if(strcmp(ptr, "join_group") == 0)
-		{
-			if( username.compare("user") == 0 )
-			{
-				cout<<"Login Required\n";
-			}
-		}
-		else if(strcmp(ptr, "upload") == 0 )
-		{
-			
-		}
-		else if(strcmp(ptr, "download") == 0)
-		{
-			
-		}
-		else if(strcmp(ptr, "list_files") == 0)
-		{
-			
-		}
-		else if(strcmp(ptr, "") == 0)
-		{
-			
+			ptr = strtok(NULL, delim);
+			ptr = strtok(NULL, delim);
+			ptr = strtok(NULL, delim);
+
+			destfile = string(ptr);
+			destfile = destfile.substr(0, destfile.size()-1);
+			cout << destfile << "\n";
 		}
 	}
-}	
+}
 
 void *writefile(void *arg)
 {
-	strcpy(sendBuff, "helllllooo\n");
-	write(connfd,sendBuff,SIZE);	
+	int src = open(filetosend.c_str(), O_RDONLY);
+	int in, out;
+	while (1)
+	{
+		in = read(src, sendBuff, SIZE);
+		if (in <= 0) 
+			break;
+		out = write(connfd, sendBuff, in);
+		if (out <= 0) 
+			break;
+	}
+	
+	close(src);
 }
 
 void *readfile(void *arg)
 {
-	read(sockfd1,recvBuff,SIZE);
-	printf("server: %s",recvBuff);	
+	int dst = creat( destfile.c_str(), 0666);
+	int in, out;
+	
+	while (1)
+	{
+		in = read(sockfd1, recvBuff, SIZE);
+		if (in <= 0) 
+			break;
+		out = write(dst, recvBuff, in);
+		if (out <= 0) 
+			break;
+	}
+	close(dst);
 }
 
 void server()
@@ -137,9 +147,8 @@ void server()
 	struct sockaddr_in serv_addr;
 	//int *param = (int *)arg;
 	//int port = param[0];
-	pthread_attr_t custom1,custom2;
+	pthread_attr_t custom1;
 	pthread_attr_init(&custom1);
-	pthread_attr_init(&custom2);
 	
 	int i = 0;
    	int listenfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -171,9 +180,9 @@ void *clientToTracker(void *arg)
 	
 	struct sockaddr_in serv_addr; 
 	//int sockfd;
-	pthread_attr_t custom1,custom2;
-	pthread_attr_init(&custom1);
-    pthread_attr_init(&custom2);
+	pthread_attr_t attr1,attr2;
+	pthread_attr_init( &attr1);
+    pthread_attr_init( &attr2);
 	int *p;
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
@@ -195,8 +204,8 @@ void *clientToTracker(void *arg)
 		printf("\n Error : Connect Failed \n");
     }
 	
-	pthread_create(&thread1,&custom1,readd,(void *)p);
-	pthread_create(&thread2,&custom2,writee,(void *)p);	
+	pthread_create(&thread1,&attr1,readd,(void *)p);
+	pthread_create(&thread2,&attr2,writee,(void *)p);	
 	
 	pthread_join(thread1,NULL);
 	pthread_join(thread2,NULL);
@@ -246,8 +255,6 @@ void *clientToClient(void *arg)
 }
 int main(int argc, char *argv[])
 {
-	pthread_attr_t custom3;
-	pthread_attr_init(&custom3);
 	srand( time(0) );
 	s_port = rand()%10000 + 5000;
 	if(argc < 2)
@@ -256,16 +263,17 @@ int main(int argc, char *argv[])
         return 1;
     } 
 	
-    memset(recvBuff, '0',sizeof(recvBuff));
+	pthread_attr_t attr;
+	pthread_attr_init( &attr);
+
     int port = atoi(argv[2]);
-    
 	int *parameter = (int *)malloc(sizeof(int));
 	parameter[0] = port;
 		
-	pthread_create(&thread1,&custom3,clientToTracker,(void *)parameter);
+	pthread_create( &thread1, &attr, clientToTracker, (void *)parameter);
 	
 	server();
-	pthread_join(thread3,NULL);
+	pthread_join(thread1,NULL);
     
 	return 0;
 }

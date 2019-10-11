@@ -27,8 +27,6 @@ map< string, string> user;
 map< string, int > user_active;
 map< int, string > user_active_inverse;
 
-pthread_mutex_t lck;
-
 void initialization()
 {
 	ifstream fin;
@@ -40,39 +38,23 @@ void initialization()
 		tmp="";
 		for(int i=0; i<str.size(); i++)
 		{
-			if(str[i]!=' ')
+			if(str[i] != ' ')
 				tmp += str[i];
 			else
 			{
 				x = tmp;
-				tmp="";
+				tmp = "";
 			}
 		}
-		if(str.size()>1)
-			user.insert(make_pair(x,tmp));
+		if(str.size() > 1)
+			user.insert( make_pair(x, tmp));
 	}
+	remove( "tracker_info.txt");
 	/*
 	map<string, string>::iterator it;
 	for(it=user.begin();it!=user.end();it++)
 		cout<<it->first<<" "<<it->second<<"\n";
 	*/
-}
-void upload(char filepath[100], int i)
-{
-	int in, out, dst;
-	dst = creat(filepath, 0666);
-	while(1)
-	{
-		in = read(connfd[i], readBuff, SIZE);
-		if(in <= 0)
-			break;
-		if(readBuff[0] == 'O' && readBuff[1] == 'K' )
-			break;
-		out = write(dst, readBuff, in);
-		if(out <= 0) 
-			break;
-	}
-	printf("File Uploaded Successfully\n");
 }
 
 void login(string userid, string pass, int i)
@@ -92,6 +74,138 @@ void login(string userid, string pass, int i)
 	//cout<<sendBuff<<"\n";
 	write(connfd[i], sendBuff, SIZE);
 }
+
+void create_group(string gid, int i)
+{
+	ifstream f(gid.c_str());
+	if(f.good())
+	{
+		//cout<<"Already Exist"<<"\n";
+		strcpy(sendBuff, "Group Already Exist\n");
+		write(connfd[i], sendBuff, SIZE);
+	}
+	else
+	{
+		//cout<<"New Group"<<"\n";
+		ofstream fout;
+		fout.open(gid.c_str());
+		fout << user_active_inverse[connfd[i]] << "\n";
+		strcpy(sendBuff, "Group Created\n");
+		write(connfd[i], sendBuff, SIZE);
+		fout.close();
+	}
+}
+
+void join_group( string gid, int i)
+{
+	ifstream f(gid.c_str());
+	if(f.good())
+	{
+		//cout<<"Group Exist"<<"\n";
+		ofstream fout;
+		fout.open(gid.c_str(), ios::app);
+		fout << user_active_inverse[connfd[i]] << "\n";
+		strcpy(sendBuff, "Group Joined\n");
+		write(connfd[i], sendBuff, SIZE);
+		fout.close();
+	}
+	else
+	{
+		//cout<<"No Group"<<"\n";
+		strcpy(sendBuff, "No Group Exist\n");
+		write(connfd[i], sendBuff, SIZE);
+		
+	}
+}
+
+void upload_file(string filepath, string gid, int i)
+{
+	string grp = ".group/" + gid;
+	ifstream f(filepath.c_str());
+	ifstream f2(grp.c_str());
+	if(f.good() && f2.good())
+	{
+		ofstream fout("file_info.txt", ios::app);
+		fout << filepath << " " << user_active_inverse[connfd[i]] << " " << gid << "\n";
+		fout.close();
+		strcpy(sendBuff, "File Uploaded Successfully\n");
+		
+	}
+	else
+	{
+		strcpy(sendBuff, "Wrong Arguments\n");
+	}
+	write(connfd[i], sendBuff, SIZE);
+}
+
+void download_file( string gid, string filepath, string destpath, int i)
+{
+	bool f;
+	string str, file, user, username, port, groupname;
+	char *ptr, delim[] = " ";
+	ifstream fin("file_info.txt");
+	while(fin)
+	{
+		getline(fin, str);
+		char arr[100];
+		strcpy( arr, str.c_str());
+		//cout << str << " xx " << arr << "aaaaa\n";
+		
+		ptr = strtok( arr, delim);
+		file = string(ptr);
+
+		ptr = strtok( NULL, delim);
+		username = string(ptr);
+
+		ptr = strtok( NULL, delim);
+		groupname = string(ptr);
+
+		if( file.compare(filepath) == 0 && groupname.compare( gid) == 0)
+		{
+			f = true;
+			break;
+		}
+	}
+	fin.close();
+	if(f)
+	{
+		//cout << username << " xx " << file << " xxx " << groupname << "\n";
+		fin.open("tracker_info.txt", ios::in);
+		while(fin)
+		{
+			getline(fin, str);
+			char arr[100];
+			strcpy( arr, str.c_str());
+		
+			ptr = strtok( arr, delim);
+			user = string(ptr);
+
+			ptr = strtok( NULL, delim);
+			port = string(ptr);
+
+			if( user.compare(username) == 0 )
+				break;
+		}
+		fin.close();
+		//cout << username << " " << port << "\n";
+		str = "FILE " + filepath + "\n";
+		strcpy(sendBuff, str.c_str());
+		int cfd = user_active[username];
+		write(cfd, sendBuff, SIZE);
+
+		str = "PORT " + port + "\n";
+		strcpy(sendBuff, str.c_str());
+		write(connfd[i], sendBuff, SIZE);
+		
+		
+	}
+	else
+	{
+		strcpy(sendBuff, "Wrong Arguments\n");
+		write(connfd[i], sendBuff, SIZE);
+	}
+}
+
 void *readd(void *parameter)
 {
 	int *param = (int *)parameter;
@@ -100,7 +214,7 @@ void *readd(void *parameter)
 	int dst, in, out, i = param[0];
 	while(1)
 	{
-		read(connfd[i],readBuff, SIZE);
+		read(connfd[i], readBuff, SIZE);
 		printf("client: %s", readBuff);
 		ptr = strtok(readBuff, delim);
 		
@@ -132,102 +246,71 @@ void *readd(void *parameter)
 		}
 		else if(strcmp(ptr, "create_group") == 0)
 		{
-			string gid = ".group/";
-			ptr = strtok(NULL, delim);
-			gid += string(ptr);
-			struct stat buffer;
-			gid = gid.substr(0, gid.size()-1);
-			
-			//cout<<gid<<" "<<gid.size()<<"\n";
-			ifstream f(gid.c_str());
-    		if(f.good())
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				//cout<<"Already Exist"<<"\n";
-				strcpy(sendBuff, "Group Already Exist\n");
-				write(connfd[i], sendBuff, SIZE);
+				string gid = ".group/";
+				ptr = strtok(NULL, delim);
+				gid += string(ptr);
+				gid = gid.substr(0, gid.size()-1);
+				create_group(gid, i);
 			}
 			else
 			{
-				//cout<<"New Group"<<"\n";
-				ofstream fout;
-				fout.open(gid.c_str());
-				fout << user_active_inverse[connfd[i]] << "\n";
-				strcpy(sendBuff, "Group Created\n");
+				strcpy(sendBuff, "Enter Login Details\n");
 				write(connfd[i], sendBuff, SIZE);
-				fout.close();
 			}
 		}
 		else if(strcmp(ptr, "join_group") == 0)
 		{
-			string gid = ".group/";
-			ptr = strtok(NULL, delim);
-			gid += string(ptr);
-			struct stat buffer;
-			gid = gid.substr(0, gid.size()-1);
-			
-			//cout<<gid<<" "<<gid.size()<<"\n";
-			ifstream f(gid.c_str());
-    		if(f.good())
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				//cout<<"Group Exist"<<"\n";
-				ofstream fout;
-				fout.open(gid.c_str(), ios::app);
-				fout << user_active_inverse[connfd[i]] << "\n";
-				strcpy(sendBuff, "Group Joined\n");
-				write(connfd[i], sendBuff, SIZE);
+				string gid = ".group/";
+				ptr = strtok(NULL, delim);
+				gid += string(ptr);
+				gid = gid.substr(0, gid.size()-1);
+				join_group(gid, i);
 			}
 			else
 			{
-				//cout<<"No Group"<<"\n";
-				strcpy(sendBuff, "No Group Exist\n");
+				strcpy(sendBuff, "Enter Login Details\n");
 				write(connfd[i], sendBuff, SIZE);
-				
 			}
 		}
-		else if(strcmp(ptr, "upload") == 0 )
+		else if(strcmp(ptr, "upload_file") == 0 )
 		{
-			ptr = strtok(NULL, delim);
-			printf("%s\n", ptr);
-			sprintf(filepath, ".database/%s", ptr), 
-			upload(filepath, i);
-		}
-		else if(strcmp(ptr, "download") == 0 )
-		{
-			ifstream fin("tracker_info.txt");
-			string str, tmp, x;
-			string username = user_active_inverse[connfd[i]];
-			//cout << username << "\n";
-			while(fin)
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				getline(fin, str);
-				tmp="";
-				bool f = false;
-				//cout << str << "\n";
-				for(int i=0; i<str.size(); i++)
-				{
-					if(str[i]!=' ')
-						tmp += str[i];
-					else
-					{
-						x = tmp;
-						if(x.compare(username) == 0)
-							break;
-						else
-							f = true;
-						tmp="";
-					}
-					
-				}
-				if(f)
-				{
-					cout<<tmp<<"\n";
-					sprintf(sendBuff, "PORT %s\n", tmp.c_str());
-					break;
-				}
+				ptr = strtok(NULL, delim);
+				string filepath = string(ptr);
+				ptr = strtok(NULL, delim);
+				string gid = string(ptr);
+				gid = gid.substr(0, gid.size()-1);
+				//cout << filepath << filepath.size() << " " << gid << "\n";
+				upload_file(filepath, gid, i);
 			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
+			}
+		}
+		else if(strcmp(ptr, "download_file") == 0 )
+		{
+			string gid, filepath, destpath;
 			
-			cout << sendBuff << "\n";
-			write(connfd[i], sendBuff, SIZE);
+			ptr = strtok(NULL, delim);
+			gid = string(ptr);
+			
+			ptr = strtok(NULL, delim);
+			filepath = string(ptr);
+			
+			ptr = strtok(NULL, delim);
+			destpath = string(ptr);
+			destpath = destpath.substr(0, destpath.size()-1);
+			
+			//cout << gid << " " << filepath << " " << destpath << "\n";
+			download_file(gid, filepath, destpath, i);
+			
 		}
 		//fflush(stdin);
 		memset(sendBuff, '\0', SIZE);
@@ -241,9 +324,8 @@ int main(int argc, char *argv[])
 {
 	initialization();
 	
-	pthread_attr_t custom1,custom2;
-	pthread_attr_init(&custom1);
-	pthread_attr_init(&custom2);
+	pthread_attr_t attr;
+	pthread_attr_init( &attr);
 	
 	int i = 0;
    	listenfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -263,7 +345,7 @@ int main(int argc, char *argv[])
 		connfd[i] = accept(listenfd, (struct sockaddr*)NULL, NULL); 
 		int *parameter = (int *)malloc(sizeof(int));
 		parameter[0] = i;
-		pthread_create(&thread1[i], &custom1,readd,(void *)parameter);
+		pthread_create(&thread1[i], &attr,readd,(void *)parameter);
 		i++;
 	}
 	i=0;
