@@ -77,7 +77,8 @@ void login(string userid, string pass, int i)
 
 void create_group(string gid, int i)
 {
-	ifstream f(gid.c_str());
+	string grppath = ".group/" + gid;
+	ifstream f(grppath.c_str());
 	if(f.good())
 	{
 		//cout<<"Already Exist"<<"\n";
@@ -87,12 +88,16 @@ void create_group(string gid, int i)
 	else
 	{
 		//cout<<"New Group"<<"\n";
-		ofstream fout;
-		fout.open(gid.c_str());
+		ofstream fout, fout1;
+		fout1.open("group_info", ios::app);
+		fout1 << gid << " " << user_active_inverse[connfd[i]] << "\n";
+
+		fout.open(grppath.c_str());
 		fout << user_active_inverse[connfd[i]] << "\n";
 		strcpy(sendBuff, "Group Created\n");
 		write(connfd[i], sendBuff, SIZE);
 		fout.close();
+		fout1.close();
 	}
 }
 
@@ -144,9 +149,10 @@ void download_file( string gid, string filepath, string destpath, int i)
 	string str, file, user, username, port, groupname;
 	char *ptr, delim[] = " ";
 	ifstream fin("file_info.txt");
+	getline(fin, str);
+		
 	while(fin)
 	{
-		getline(fin, str);
 		char arr[100];
 		strcpy( arr, str.c_str());
 		//cout << str << " xx " << arr << "aaaaa\n";
@@ -160,20 +166,30 @@ void download_file( string gid, string filepath, string destpath, int i)
 		ptr = strtok( NULL, delim);
 		groupname = string(ptr);
 
-		if( file.compare(filepath) == 0 && groupname.compare( gid) == 0)
+		string filename = "";
+		int i = file.size();
+		i--;
+		while(i>=0 && file[i]!='/')
+		{
+			filename = file[i] + filename;
+			i--;
+		}
+		cout << filename << "\n";
+		if( filename.compare(filepath) == 0 && groupname.compare( gid) == 0)
 		{
 			f = true;
 			break;
 		}
+		getline(fin, str);
 	}
 	fin.close();
 	if(f)
 	{
 		//cout << username << " xx " << file << " xxx " << groupname << "\n";
 		fin.open("tracker_info.txt", ios::in);
+		getline(fin, str);
 		while(fin)
 		{
-			getline(fin, str);
 			char arr[100];
 			strcpy( arr, str.c_str());
 		
@@ -185,6 +201,8 @@ void download_file( string gid, string filepath, string destpath, int i)
 
 			if( user.compare(username) == 0 )
 				break;
+			getline(fin, str);
+			
 		}
 		fin.close();
 		//cout << username << " " << port << "\n";
@@ -248,9 +266,9 @@ void *readd(void *parameter)
 		{
 			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				string gid = ".group/";
+				string gid;
 				ptr = strtok(NULL, delim);
-				gid += string(ptr);
+				gid = string(ptr);
 				gid = gid.substr(0, gid.size()-1);
 				create_group(gid, i);
 			}
@@ -311,6 +329,61 @@ void *readd(void *parameter)
 			//cout << gid << " " << filepath << " " << destpath << "\n";
 			download_file(gid, filepath, destpath, i);
 			
+		}
+		else if(strcmp(ptr, "list_groups\n") == 0)
+		{
+			ifstream fin(".group/group_info");
+			while(fin)
+			{
+				string str;
+				getline(fin, str);
+				str += "\n";
+				//cout << str ;
+				strcpy(sendBuff, str.c_str());
+				write( connfd[i], sendBuff, SIZE);
+			}
+		}
+		else if(strcmp(ptr, "list_files") == 0)
+		{
+			ptr = strtok(NULL, delim);
+			string gid = string(ptr);
+			gid = gid.substr(0, gid.size()-1);
+			ifstream fin("file_info.txt");
+			string file, groupname, str;
+			getline(fin, str);
+			while(fin)
+			{
+				char arr[100];
+				strcpy( arr, str.c_str());
+				//cout << str << " xx " << arr << "aaaaa\n";
+				ptr = strtok( arr, delim);
+				file = string(ptr);
+
+				ptr = strtok( NULL, delim);
+				
+				ptr = strtok( NULL, delim);
+				groupname = string(ptr);
+				
+				//cout << file << " " << groupname << "\n";
+				if( gid.compare(groupname) == 0)
+				{
+					file += "\n";
+					strcpy(sendBuff, file.c_str());
+					write(connfd[i], sendBuff, SIZE);
+				}
+				getline(fin, str);
+				
+			}
+		}
+		else if(strcmp(ptr, "logout") == 0)
+		{
+			string username = user_active_inverse[connfd[i]];
+			user_active_inverse.erase(connfd[i]);
+			user_active.erase(username);
+
+			strcpy( sendBuff, "Logout Successfully\n");
+			write( connfd[i], sendBuff, SIZE);
+			close(connfd[i]);
 		}
 		//fflush(stdin);
 		memset(sendBuff, '\0', SIZE);

@@ -24,7 +24,7 @@ char sendBuff[SIZE];
 pthread_t thread1,thread2, thread3;
 string username = "user";
 char *ip = "127.0.0.1";
-string filetosend, destfile;
+string filetosend, destpath;
 
 void *clientToTracker(void *);
 void *clientToClient(void *);
@@ -84,7 +84,6 @@ void *writee(void *arg)
 	{
 		//printf("%s: ",username);
 		fgets(sendBuff, 512, stdin);
-		write(sockfd, sendBuff, SIZE);
 			
 		ptr = strtok(sendBuff, delim);
 		//printf("%s\n", ptr);
@@ -96,14 +95,24 @@ void *writee(void *arg)
 		}
 		else if(strcmp(ptr, "download_file") == 0)
 		{
+			string file;
 			ptr = strtok(NULL, delim);
 			ptr = strtok(NULL, delim);
-			ptr = strtok(NULL, delim);
+			file = string(ptr);
 
-			destfile = string(ptr);
-			destfile = destfile.substr(0, destfile.size()-1);
-			cout << destfile << "\n";
+			ptr = strtok(NULL, delim);
+			destpath = string(ptr);
+			destpath = destpath.substr(0, destpath.size()-1);
+			destpath += file;
+			
+			cout << destpath << "\n";
 		}
+		else if(strcmp(ptr, "upload_file") == 0)
+		{
+
+		}
+		write(sockfd, sendBuff, SIZE);
+		
 	}
 }
 
@@ -120,13 +129,14 @@ void *writefile(void *arg)
 		if (out <= 0) 
 			break;
 	}
-	
+	cout << "File Uploaded Successfully\n";
 	close(src);
+	close(connfd);
 }
 
 void *readfile(void *arg)
 {
-	int dst = creat( destfile.c_str(), 0666);
+	int dst = creat( destpath.c_str(), 0666);
 	int in, out;
 	
 	while (1)
@@ -138,6 +148,8 @@ void *readfile(void *arg)
 		if (out <= 0) 
 			break;
 	}
+	cout << "File Downloaded Successfully\n";
+
 	close(dst);
 }
 
@@ -169,7 +181,6 @@ void server()
 		pthread_create(&thread1, &custom1,writefile,(void *)parameter);
 	}
 	pthread_join(thread1,NULL);
-	close(connfd);
 	
 }
 
