@@ -49,7 +49,7 @@ void initialization()
 		if(str.size() > 1)
 			user.insert( make_pair(x, tmp));
 	}
-	remove( "tracker_info.txt");
+	remove( "peer_info.txt");
 	/*
 	map<string, string>::iterator it;
 	for(it=user.begin();it!=user.end();it++)
@@ -123,7 +123,7 @@ void join_group( string gid, int i)
 	}
 }
 
-void upload_file(string filepath, string gid, int i)
+void upload_file(string filepath, string gid, string hash, int i)
 {
 	string grp = ".group/" + gid;
 	ifstream f(filepath.c_str());
@@ -131,7 +131,7 @@ void upload_file(string filepath, string gid, int i)
 	if(f.good() && f2.good())
 	{
 		ofstream fout("file_info.txt", ios::app);
-		fout << filepath << " " << user_active_inverse[connfd[i]] << " " << gid << "\n";
+		fout << filepath << " " << user_active_inverse[connfd[i]] << " " << gid << " " << hash << "\n";
 		fout.close();
 		strcpy(sendBuff, "File Uploaded Successfully\n");
 		
@@ -146,7 +146,7 @@ void upload_file(string filepath, string gid, int i)
 void download_file( string gid, string filepath, string destpath, int i)
 {
 	bool f;
-	string str, file, user, username, port, groupname;
+	string str, file, user, username, port, groupname, filehash;
 	char *ptr, delim[] = " ";
 	ifstream fin("file_info.txt");
 	getline(fin, str);
@@ -166,6 +166,9 @@ void download_file( string gid, string filepath, string destpath, int i)
 		ptr = strtok( NULL, delim);
 		groupname = string(ptr);
 
+		ptr = strtok( NULL, delim);
+		filehash = string(ptr);
+
 		string filename = "";
 		int i = file.size();
 		i--;
@@ -174,7 +177,7 @@ void download_file( string gid, string filepath, string destpath, int i)
 			filename = file[i] + filename;
 			i--;
 		}
-		cout << filename << "\n";
+		//cout << filename << "\n";
 		if( filename.compare(filepath) == 0 && groupname.compare( gid) == 0)
 		{
 			f = true;
@@ -186,7 +189,7 @@ void download_file( string gid, string filepath, string destpath, int i)
 	if(f)
 	{
 		//cout << username << " xx " << file << " xxx " << groupname << "\n";
-		fin.open("tracker_info.txt", ios::in);
+		fin.open("peer_info.txt", ios::in);
 		getline(fin, str);
 		while(fin)
 		{
@@ -211,7 +214,7 @@ void download_file( string gid, string filepath, string destpath, int i)
 		int cfd = user_active[username];
 		write(cfd, sendBuff, SIZE);
 
-		str = "PORT " + port + "\n";
+		str = "PORT " + port + " " + filehash + "\n";
 		strcpy(sendBuff, str.c_str());
 		write(connfd[i], sendBuff, SIZE);
 		
@@ -302,9 +305,12 @@ void *readd(void *parameter)
 				string filepath = string(ptr);
 				ptr = strtok(NULL, delim);
 				string gid = string(ptr);
-				gid = gid.substr(0, gid.size()-1);
+				//gid = gid.substr(0, gid.size()-1);
+				ptr = strtok(NULL, delim);
+				string hash = string(ptr);
+				hash = hash.substr(0, hash.size()-1);
 				//cout << filepath << filepath.size() << " " << gid << "\n";
-				upload_file(filepath, gid, i);
+				upload_file(filepath, gid, hash, i);
 			}
 			else
 			{
@@ -375,7 +381,7 @@ void *readd(void *parameter)
 				
 			}
 		}
-		else if(strcmp(ptr, "logout") == 0)
+		else if(strcmp(ptr, "logout\n") == 0)
 		{
 			string username = user_active_inverse[connfd[i]];
 			user_active_inverse.erase(connfd[i]);
