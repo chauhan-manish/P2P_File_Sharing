@@ -123,18 +123,76 @@ void join_group( string gid, int i)
 	}
 }
 
+
+void leave_group( string gid, int i)
+{
+	ifstream f(gid.c_str());
+	if(f.good())
+	{
+		//cout<<"Group Exist"<<"\n";
+		string username = user_active_inverse[connfd[i]];
+		string str, tmp = ".group/tmp";
+		ofstream fout(tmp.c_str(),ios::app);
+		
+		while(f)
+		{
+			getline(f, str);
+			if( str.compare(username) != 0)
+				fout << str << "\n";
+		}
+
+		fout.close();
+		remove(gid.c_str());
+		rename(tmp.c_str(), gid.c_str());
+
+		strcpy(sendBuff, "Group Leaved\n");
+		write(connfd[i], sendBuff, SIZE);
+
+	}
+	else
+	{
+		//cout<<"No Group"<<"\n";
+		strcpy(sendBuff, "No Group Exist\n");
+		write(connfd[i], sendBuff, SIZE);
+		
+	}
+}
+
+bool check_group(string username, string gid)
+{
+	string str, grp = ".group/" + gid;
+	ifstream fin(grp.c_str());
+	while(fin)
+	{
+		getline(fin, str);
+		if(str.compare(username) == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void upload_file(string filepath, string gid, string hash, int i)
 {
 	string grp = ".group/" + gid;
+	string username = user_active_inverse[connfd[i]];
 	ifstream f(filepath.c_str());
 	ifstream f2(grp.c_str());
+	
 	if(f.good() && f2.good())
 	{
-		ofstream fout("file_info.txt", ios::app);
-		fout << filepath << " " << user_active_inverse[connfd[i]] << " " << gid << " " << hash << "\n";
-		fout.close();
-		strcpy(sendBuff, "File Uploaded Successfully\n");
-		
+		if(!check_group(username, gid))
+		{
+			strcpy(sendBuff, "Group Access Denied\n");
+		}
+		else
+		{
+			ofstream fout("file_info.txt", ios::app);
+			fout << filepath << " " << user_active_inverse[connfd[i]] << " " << gid << " " << hash << "\n";
+			fout.close();
+			strcpy(sendBuff, "File Uploaded Successfully\n");
+		}
 	}
 	else
 	{
@@ -149,85 +207,96 @@ void download_file( string gid, string filepath, string destpath, int i)
 	string str, file, user, username, port, groupname, filehash;
 	char *ptr, delim[] = " ";
 	ifstream fin("file_info.txt");
-	getline(fin, str);
-		
-	while(fin)
+	username = user_active_inverse[connfd[i]];
+	if(!check_group(username, gid))
 	{
-		char arr[100];
-		strcpy( arr, str.c_str());
-		//cout << str << " xx " << arr << "aaaaa\n";
-		
-		ptr = strtok( arr, delim);
-		file = string(ptr);
-
-		ptr = strtok( NULL, delim);
-		username = string(ptr);
-
-		ptr = strtok( NULL, delim);
-		groupname = string(ptr);
-
-		ptr = strtok( NULL, delim);
-		filehash = string(ptr);
-
-		string filename = "";
-		int i = file.size();
-		i--;
-		while(i>=0 && file[i]!='/')
-		{
-			filename = file[i] + filename;
-			i--;
-		}
-		//cout << filename << "\n";
-		if( filename.compare(filepath) == 0 && groupname.compare( gid) == 0)
-		{
-			f = true;
-			break;
-		}
-		getline(fin, str);
+		strcpy(sendBuff, "Group Access Denied\n");
 	}
-	fin.close();
-	if(f)
-	{
-		//cout << username << " xx " << file << " xxx " << groupname << "\n";
-		fin.open("peer_info.txt", ios::in);
-		getline(fin, str);
+	else
+	{	
 		while(fin)
 		{
+			getline(fin, str);
+			if(str.size() == 0)
+				break;
+				
 			char arr[100];
 			strcpy( arr, str.c_str());
-		
+			//cout << str << " xx " << arr << "aaaaa\n";
+			
 			ptr = strtok( arr, delim);
-			user = string(ptr);
+			file = string(ptr);
 
 			ptr = strtok( NULL, delim);
-			port = string(ptr);
+			username = string(ptr);
 
-			if( user.compare(username) == 0 )
+			ptr = strtok( NULL, delim);
+			groupname = string(ptr);
+
+			ptr = strtok( NULL, delim);
+			filehash = string(ptr);
+
+			string filename = "";
+			int i = file.size();
+			i--;
+			while(i>=0 && file[i]!='/')
+			{
+				filename = file[i] + filename;
+				i--;
+			}
+			//cout << filename << "\n";
+			if( filename.compare(filepath) == 0 && groupname.compare( gid) == 0)
+			{
+				f = true;
 				break;
-			getline(fin, str);
+			}
 			
 		}
 		fin.close();
-		//cout << username << " " << port << "\n";
-		str = "FILE " + filepath + "\n";
-		strcpy(sendBuff, str.c_str());
-		int cfd = user_active[username];
-		write(cfd, sendBuff, SIZE);
+		if(f)
+		{
+			//cout << username << " xx " << file << " xxx " << groupname << "\n";
+			fin.open("peer_info.txt", ios::in);
+			while(fin)
+			{
+				getline(fin, str);
+				if(str.size() == 0)
+					break;
+				char arr[100];
+				strcpy( arr, str.c_str());
+			
+				ptr = strtok( arr, delim);
+				user = string(ptr);
 
-		str = "PORT " + port + " " + filehash + "\n";
-		strcpy(sendBuff, str.c_str());
-		write(connfd[i], sendBuff, SIZE);
-		
-		
-	}
-	else
-	{
-		strcpy(sendBuff, "Wrong Arguments\n");
-		write(connfd[i], sendBuff, SIZE);
+				ptr = strtok( NULL, delim);
+				port = string(ptr);
+
+				if( user.compare(username) == 0 )
+					break;
+				
+			}
+			fin.close();
+			//cout << username << " " << port << "\n";
+			str = "FILE " + file + "\n";
+			strcpy(sendBuff, str.c_str());
+			int cfd = user_active[username];
+			write(cfd, sendBuff, SIZE);
+
+			str = "PORT " + port + " " + filehash + "\n";
+			strcpy(sendBuff, str.c_str());
+			write(connfd[i], sendBuff, SIZE);
+			
+			
+		}
+		else
+		{
+			strcpy(sendBuff, "Wrong Arguments\n");
+			write(connfd[i], sendBuff, SIZE);
+		}
 	}
 }
 
-void *readd(void *parameter)
+void *readFromPeer(void *parameter)
 {
 	int *param = (int *)parameter;
 	char delim[]=" ", filepath[100];
@@ -297,6 +366,22 @@ void *readd(void *parameter)
 				write(connfd[i], sendBuff, SIZE);
 			}
 		}
+		else if(strcmp(ptr, "leave_group") == 0)
+		{
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
+			{
+				string gid = ".group/";
+				ptr = strtok(NULL, delim);
+				gid += string(ptr);
+				gid = gid.substr(0, gid.size()-1);
+				leave_group(gid, i);
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
+			}
+		}
 		else if(strcmp(ptr, "upload_file") == 0 )
 		{
 			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
@@ -320,77 +405,143 @@ void *readd(void *parameter)
 		}
 		else if(strcmp(ptr, "download_file") == 0 )
 		{
-			string gid, filepath, destpath;
-			
-			ptr = strtok(NULL, delim);
-			gid = string(ptr);
-			
-			ptr = strtok(NULL, delim);
-			filepath = string(ptr);
-			
-			ptr = strtok(NULL, delim);
-			destpath = string(ptr);
-			destpath = destpath.substr(0, destpath.size()-1);
-			
-			//cout << gid << " " << filepath << " " << destpath << "\n";
-			download_file(gid, filepath, destpath, i);
-			
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
+			{
+				string gid, filepath, destpath;
+				
+				ptr = strtok(NULL, delim);
+				gid = string(ptr);
+				
+				ptr = strtok(NULL, delim);
+				filepath = string(ptr);
+				
+				ptr = strtok(NULL, delim);
+				destpath = string(ptr);
+				destpath = destpath.substr(0, destpath.size()-1);
+				
+				//cout << gid << " " << filepath << " " << destpath << "\n";
+				download_file(gid, filepath, destpath, i);
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
+			}	
 		}
 		else if(strcmp(ptr, "list_groups\n") == 0)
 		{
-			ifstream fin(".group/group_info");
-			while(fin)
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				string str;
-				getline(fin, str);
-				str += "\n";
-				//cout << str ;
-				strcpy(sendBuff, str.c_str());
-				write( connfd[i], sendBuff, SIZE);
+				ifstream fin(".group/group_info");
+				while(fin)
+				{
+					string str;
+					getline(fin, str);
+					str += "\n";
+					//cout << str ;
+					strcpy(sendBuff, str.c_str());
+					write( connfd[i], sendBuff, SIZE);
+				}
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
 			}
 		}
 		else if(strcmp(ptr, "list_files") == 0)
 		{
-			ptr = strtok(NULL, delim);
-			string gid = string(ptr);
-			gid = gid.substr(0, gid.size()-1);
-			ifstream fin("file_info.txt");
-			string file, groupname, str;
-			getline(fin, str);
-			while(fin)
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				char arr[100];
-				strcpy( arr, str.c_str());
-				//cout << str << " xx " << arr << "aaaaa\n";
-				ptr = strtok( arr, delim);
-				file = string(ptr);
+				ptr = strtok(NULL, delim);
+				string gid = string(ptr);
+				gid = gid.substr(0, gid.size()-1);
+				string username = user_active_inverse[connfd[i]];
 
-				ptr = strtok( NULL, delim);
-				
-				ptr = strtok( NULL, delim);
-				groupname = string(ptr);
-				
-				//cout << file << " " << groupname << "\n";
-				if( gid.compare(groupname) == 0)
+				if(!check_group(username, gid))
 				{
-					file += "\n";
-					strcpy(sendBuff, file.c_str());
-					write(connfd[i], sendBuff, SIZE);
+					strcpy(sendBuff, "Group Access Denied\n");
 				}
-				getline(fin, str);
-				
+				else
+				{
+					ifstream fin("file_info.txt");
+					string file, groupname, str;
+					while(fin)
+					{
+						getline(fin, str);
+						if(str.size() == 0)
+							break;
+						char arr[100];
+						strcpy( arr, str.c_str());
+						//cout << str << " xx " << arr << "aaaaa\n";
+						ptr = strtok( arr, delim);
+						file = string(ptr);
+
+						ptr = strtok( NULL, delim);
+						
+						ptr = strtok( NULL, delim);
+						groupname = string(ptr);
+						
+						//cout << file << " " << groupname << "\n";
+						if( gid.compare(groupname) == 0)
+						{
+							file += "\n";
+							strcpy(sendBuff, file.c_str());
+							write(connfd[i], sendBuff, SIZE);
+						}
+					}
+				}
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
 			}
 		}
 		else if(strcmp(ptr, "logout\n") == 0)
 		{
-			string username = user_active_inverse[connfd[i]];
-			user_active_inverse.erase(connfd[i]);
-			user_active.erase(username);
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
+			{
+				string username = user_active_inverse[connfd[i]];
+				user_active_inverse.erase(connfd[i]);
+				user_active.erase(username);
+				string str, user, port;
+				ifstream fin("peer_info.txt");
+				ofstream fout("tmp_peer_info.txt", ios::app);
+				while(fin)
+				{
+					getline(fin, str);
+					if(str.size() == 0)
+						break;
+					char arr[100];
+					strcpy( arr, str.c_str());
+				
+					ptr = strtok( arr, delim);
+					user = string(ptr);
 
-			strcpy( sendBuff, "Logout Successfully\n");
-			write( connfd[i], sendBuff, SIZE);
-			close(connfd[i]);
+					ptr = strtok( NULL, delim);
+					port = string(ptr);
+
+					if( user.compare(username) != 0 )
+						fout << user << " " << port << "\n";
+					
+				}
+
+				fin.close();
+				fout.close();
+				remove("peer_info.txt");
+				rename("tmp_peer_info.txt", "peer_info.txt");
+
+				strcpy( sendBuff, "Logout Successfully\n");
+				write( connfd[i], sendBuff, SIZE);
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
+			}
 		}
+		
 		//fflush(stdin);
 		memset(sendBuff, '\0', SIZE);
 		memset(readBuff, '\0', SIZE);
@@ -424,7 +575,7 @@ int main(int argc, char *argv[])
 		connfd[i] = accept(listenfd, (struct sockaddr*)NULL, NULL); 
 		int *parameter = (int *)malloc(sizeof(int));
 		parameter[0] = i;
-		pthread_create(&thread1[i], &attr,readd,(void *)parameter);
+		pthread_create(&thread1[i], &attr,readFromPeer,(void *)parameter);
 		i++;
 	}
 	i=0;

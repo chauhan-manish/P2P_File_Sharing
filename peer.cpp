@@ -45,6 +45,10 @@ void *readFromTracker(void *arg)
 			ofstream fout("peer_info.txt", ios::app);
 			fout << username << " " << s_port << "\n";
 		}
+		else if( strcmp(ptr, "Logout") == 0 )
+		{
+			username = "user";
+		}
 		else if( strcmp(ptr, "Invalid") == 0 )
 		{
 			username = "user";
