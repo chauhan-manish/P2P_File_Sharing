@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 
 using namespace std;
-#define SIZE 512
+#define SIZE 524288
 pthread_t thread1[10];
 int listenfd = 0, connfd[10] = {0};
 struct sockaddr_in serv_addr; 
@@ -57,6 +57,31 @@ void initialization()
 	*/
 }
 
+bool check_owner(string gid)
+{
+	string str;
+	ifstream fin(gid.c_str());
+	getline(fin, str);
+	if(user_active.find(str) != user_active.end())
+		return true;
+	return false;
+}
+
+bool check_group(string username, string gid)
+{
+	string str, grp = ".group/" + gid;
+	ifstream fin(grp.c_str());
+	while(fin)
+	{
+		getline(fin, str);
+		if(str.compare(username) == 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void login(string userid, string pass, int i)
 {
 	if( user.find(userid) != user.end() && (pass.compare(user[userid]))==0 )
@@ -89,7 +114,7 @@ void create_group(string gid, int i)
 	{
 		//cout<<"New Group"<<"\n";
 		ofstream fout, fout1;
-		fout1.open("group_info", ios::app);
+		fout1.open(".group/group_info", ios::app);
 		fout1 << gid << " " << user_active_inverse[connfd[i]] << "\n";
 
 		fout.open(grppath.c_str());
@@ -107,12 +132,20 @@ void join_group( string gid, int i)
 	if(f.good())
 	{
 		//cout<<"Group Exist"<<"\n";
-		ofstream fout;
-		fout.open(gid.c_str(), ios::app);
-		fout << user_active_inverse[connfd[i]] << "\n";
-		strcpy(sendBuff, "Group Joined\n");
-		write(connfd[i], sendBuff, SIZE);
-		fout.close();
+		if(check_owner(gid))
+		{
+			ofstream fout;
+			fout.open(gid.c_str(), ios::app);
+			fout << user_active_inverse[connfd[i]] << "\n";
+			strcpy(sendBuff, "Group Joined\n");
+			write(connfd[i], sendBuff, SIZE);
+			fout.close();
+		}
+		else
+		{
+			strcpy(sendBuff, "Owner Inactive\n");
+			write(connfd[i], sendBuff, SIZE);	
+		}
 	}
 	else
 	{
@@ -156,21 +189,6 @@ void leave_group( string gid, int i)
 		write(connfd[i], sendBuff, SIZE);
 		
 	}
-}
-
-bool check_group(string username, string gid)
-{
-	string str, grp = ".group/" + gid;
-	ifstream fin(grp.c_str());
-	while(fin)
-	{
-		getline(fin, str);
-		if(str.compare(username) == 0)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 void upload_file(string filepath, string gid, string hash, int i)
@@ -296,10 +314,47 @@ void download_file( string gid, string filepath, string destpath, int i)
 	}
 }
 
+void logout( int i)
+{
+	string username = user_active_inverse[connfd[i]];
+	user_active_inverse.erase(connfd[i]);
+	user_active.erase(username);
+	string str, user, port;
+	ifstream fin("peer_info.txt");
+	ofstream fout("tmp_peer_info.txt", ios::app);
+	char delim[] = " ", *ptr;
+	while(fin)
+	{
+		getline(fin, str);
+		if(str.size() == 0)
+			break;
+		char arr[100];
+		strcpy( arr, str.c_str());
+	
+		ptr = strtok( arr, delim);
+		user = string(ptr);
+
+		ptr = strtok( NULL, delim);
+		port = string(ptr);
+
+		if( user.compare(username) != 0 )
+			fout << user << " " << port << "\n";
+		
+	}
+
+	fin.close();
+	fout.close();
+	remove("peer_info.txt");
+	rename("tmp_peer_info.txt", "peer_info.txt");
+
+	strcpy( sendBuff, "Logout Successfully\n");
+	write( connfd[i], sendBuff, SIZE);
+}
+
 void *readFromPeer(void *parameter)
 {
 	int *param = (int *)parameter;
-	char delim[]=" ", filepath[100];
+	char delim[] = " ";
 	char *ptr;
 	int dst, in, out, i = param[0];
 	while(1)
@@ -502,38 +557,7 @@ void *readFromPeer(void *parameter)
 		{
 			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				string username = user_active_inverse[connfd[i]];
-				user_active_inverse.erase(connfd[i]);
-				user_active.erase(username);
-				string str, user, port;
-				ifstream fin("peer_info.txt");
-				ofstream fout("tmp_peer_info.txt", ios::app);
-				while(fin)
-				{
-					getline(fin, str);
-					if(str.size() == 0)
-						break;
-					char arr[100];
-					strcpy( arr, str.c_str());
-				
-					ptr = strtok( arr, delim);
-					user = string(ptr);
-
-					ptr = strtok( NULL, delim);
-					port = string(ptr);
-
-					if( user.compare(username) != 0 )
-						fout << user << " " << port << "\n";
-					
-				}
-
-				fin.close();
-				fout.close();
-				remove("peer_info.txt");
-				rename("tmp_peer_info.txt", "peer_info.txt");
-
-				strcpy( sendBuff, "Logout Successfully\n");
-				write( connfd[i], sendBuff, SIZE);
+				logout(i);
 			}
 			else
 			{

@@ -15,7 +15,7 @@
 #include <time.h>
 
 using namespace std;
-#define SIZE 512
+#define SIZE 524288
 int sockfd, sockfd1;
 int s_port;
 int listenfd, connfd;
@@ -23,7 +23,7 @@ char recvBuff[SIZE], sendBuff[SIZE];
 int temp; 
 pthread_t thread1,thread2, thread3;
 string username = "user";
-char *ip = "127.0.0.1";
+char *ip;
 string filetosend, destpath, filehash;
 
 void *clientToTracker(void *);
@@ -90,7 +90,7 @@ void *writeToTracker(void *arg)
 	while(1)
 	{
 		//printf("%s: ",username);
-		fgets(sendBuff, 512, stdin);
+		fgets(sendBuff, SIZE, stdin);
 		strcpy(tmpBuff, sendBuff);
 		ptr = strtok(tmpBuff, delim);
 		//printf("%s\n", ptr);
@@ -99,14 +99,6 @@ void *writeToTracker(void *arg)
 		{
 			ptr = strtok(NULL, delim);
 			username = string(ptr);
-			
-			ptr = strtok(NULL, delim);
-			string pass = string(ptr);
-			/*
-			unsigned char pass_hash[SHA_DIGEST_LENGTH];
-			SHA1( pass.c_str(), strlen(pass), pass_hash);
- 			cout << pass_hash << "\n";
- 			*/
 		}
 		else if(strcmp(ptr, "download_file") == 0)
 		{
@@ -318,7 +310,8 @@ int main(int argc, char *argv[])
     {
         printf("Less Number of Arguments\n");
         return 1;
-    } 
+    }
+    ip = argv[1];
 	
 	pthread_attr_t attr;
 	pthread_attr_init( &attr);
