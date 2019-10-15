@@ -16,7 +16,8 @@
 #include <sys/stat.h>
 
 using namespace std;
-#define SIZE 524288
+#define SIZE 512
+#define FILE_BUFF 524288
 pthread_t thread1[10];
 int listenfd = 0, connfd[10] = {0};
 struct sockaddr_in serv_addr; 
@@ -263,7 +264,8 @@ void download_file( string gid, string filepath, string destpath, int i)
 				i--;
 			}
 			//cout << filename << "\n";
-			if( filename.compare(filepath) == 0 && groupname.compare( gid) == 0)
+			
+			if( filename.compare(filepath) == 0 && (user_active.find(username) != user_active.end()) && groupname.compare( gid) == 0 )
 			{
 				f = true;
 				break;
@@ -475,7 +477,13 @@ void *readFromPeer(void *parameter)
 				destpath = destpath.substr(0, destpath.size()-1);
 				
 				//cout << gid << " " << filepath << " " << destpath << "\n";
-				download_file(gid, filepath, destpath, i);
+				if(!check_group(user_active_inverse[connfd[i]], gid))
+				{
+					strcpy(sendBuff, "Group Access Denied\n");
+					write(connfd[i], sendBuff, SIZE);
+				}
+				else
+					download_file(gid, filepath, destpath, i);
 			}
 			else
 			{
@@ -516,6 +524,7 @@ void *readFromPeer(void *parameter)
 				if(!check_group(username, gid))
 				{
 					strcpy(sendBuff, "Group Access Denied\n");
+					write(connfd[i], sendBuff, SIZE);
 				}
 				else
 				{
@@ -565,8 +574,6 @@ void *readFromPeer(void *parameter)
 				write(connfd[i], sendBuff, SIZE);
 			}
 		}
-		
-		//fflush(stdin);
 		memset(sendBuff, '\0', SIZE);
 		memset(readBuff, '\0', SIZE);
 	}

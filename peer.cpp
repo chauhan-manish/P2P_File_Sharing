@@ -15,7 +15,8 @@
 #include <time.h>
 
 using namespace std;
-#define SIZE 524288
+#define SIZE 512
+#define FILE_BUFF 524288
 int sockfd, sockfd1;
 int s_port;
 int listenfd, connfd;
@@ -85,7 +86,7 @@ void *readFromTracker(void *arg)
 }
 void *writeToTracker(void *arg)
 {
-	char delim[]=" ", tmpBuff[SIZE], Buff[SIZE];
+	char delim[]=" ", tmpBuff[SIZE], Buff[FILE_BUFF];
 	char *ptr;
 	while(1)
 	{
@@ -126,7 +127,7 @@ void *writeToTracker(void *arg)
 			int in, fd = open(file.c_str(), O_RDONLY);
 			while(1)
 			{
-				in = read(fd, Buff, SIZE);
+				in = read(fd, Buff, FILE_BUFF);
 				if( in <= 0)
 					break;
 				SHA1_Update(&ctx, Buff, in);
@@ -137,7 +138,7 @@ void *writeToTracker(void *arg)
 			string sbuff(sendBuff);
 			sbuff[sbuff.size()-1] = ' ';
 			
-			memset(sendBuff, '0', SIZE);
+			memset(sendBuff, '\0', SIZE);
 			strcpy(sendBuff, sbuff.c_str());
 			//string sName(reinterpret_cast<char*>(name));
 			strcat(sendBuff, reinterpret_cast<char*>(hash));
@@ -153,13 +154,14 @@ void *writefile(void *arg)
 {
 	int src = open(filetosend.c_str(), O_RDONLY);
 	int in, out;
+	char Buff[FILE_BUFF];
 	while (1)
 	{
-		in = read(src, sendBuff, SIZE);
+		in = read(src, Buff, FILE_BUFF);
 		if (in <= 0) 
 			break;
 
-		out = write(connfd, sendBuff, in);
+		out = write(connfd, Buff, in);
 		if (out <= 0) 
 			break;
 	}
@@ -175,15 +177,15 @@ void *readfile(void *arg)
 	
 	SHA_CTX ctx;
 	SHA1_Init(&ctx);
-	char Buff[SIZE];
+	char Buff[FILE_BUFF];
 	while (1)
 	{
-		in = read(sockfd1, recvBuff, SIZE);
+		in = read(sockfd1, Buff, FILE_BUFF);
 		if (in <= 0) 
 			break;
 
 		SHA1_Update(&ctx, Buff, in);
-		out = write(dst, recvBuff, in);
+		out = write(dst, Buff, in);
 		if (out <= 0) 
 			break;
 	}
@@ -240,22 +242,21 @@ void *clientToTracker(void *arg)
 	int *p;
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        printf("\n Error : Could not create socket \n");
+    	printf("\nSocket cannot be created\n");
     } 
 	
     memset(&serv_addr, '0', sizeof(serv_addr)); 
 	
     serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port); 
-	//printf("Server address used is: %s\n", ip);
-    if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0)
+	if(inet_pton(AF_INET, ip, &serv_addr.sin_addr)<=0)
     {
-        printf("\n inet_pton error occured\n");
+        printf("\nError\n");
     } 
 	
     if( connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
-		printf("\n Error : Connect Failed \n");
+		printf("\nConnection Failed \n");
     }
 	
 	pthread_create( &thread1, &attr1, readFromTracker, (void *)p);
@@ -280,22 +281,21 @@ void *clientToClient(void *arg)
     int *p;
 	if((sockfd1 = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
-        printf("\n Error : Could not create socket \n");
+        printf("\nSocket cannot be created\n");
     } 
 	
     memset(&serv_addr, '0', sizeof(serv_addr)); 
 	
     serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(port); 
-	//printf("Server address used is: %s\n", ip);
-    if(inet_pton( AF_INET, ip, &serv_addr.sin_addr)<=0)
+	if(inet_pton( AF_INET, ip, &serv_addr.sin_addr)<=0)
     {
-        printf("\n inet_pton error occured\n");
+        printf("\nError\n");
     } 
 	
     if( connect( sockfd1, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
-		printf("\n Error : Connect Failed \n");
+		printf("\nConnection Failed \n");
     }
 	
 	pthread_create( &thread1, &attr, readfile, (void *)p);
