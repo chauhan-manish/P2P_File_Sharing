@@ -32,23 +32,24 @@ void initialization()
 {
 	ifstream fin;
 	fin.open(".user", ios::in);
-	string str, tmp, x;
+	string str, username, pass;
+	char delim[] = " ", *ptr;
 	while(fin)
 	{
 		getline(fin, str);
-		tmp="";
-		for(int i=0; i<str.size(); i++)
+		if(str.size() > 0)
 		{
-			if(str[i] != ' ')
-				tmp += str[i];
-			else
-			{
-				x = tmp;
-				tmp = "";
-			}
+			char arr[100];
+			strcpy( arr, str.c_str());
+			
+			ptr = strtok( arr, delim);
+			username = string(ptr);
+
+			ptr = strtok( NULL, delim);
+			pass = string(ptr);
+			//cout<< username << " " << pass << "\n";
+			user.insert( make_pair(username, pass));
 		}
-		if(str.size() > 1)
-			user.insert( make_pair(x, tmp));
 	}
 	remove( "peer_info.txt");
 	/*
@@ -85,6 +86,7 @@ bool check_group(string username, string gid)
 
 void login(string userid, string pass, int i)
 {
+	//cout << userid << " " << pass << "\n";
 	if( user.find(userid) != user.end() && (pass.compare(user[userid]))==0 )
 	{
 		//username = userid;
@@ -129,14 +131,15 @@ void create_group(string gid, int i)
 
 void join_group( string gid, int i)
 {
-	ifstream f(gid.c_str());
+	string grp = ".group/" + gid;
+	ifstream f(grp.c_str());
 	if(f.good())
 	{
 		//cout<<"Group Exist"<<"\n";
-		if(check_owner(gid))
+		if(check_owner(grp))
 		{
 			ofstream fout;
-			fout.open(gid.c_str(), ios::app);
+			fout.open(grp.c_str(), ios::app);
 			fout << user_active_inverse[connfd[i]] << "\n";
 			strcpy(sendBuff, "Group Joined\n");
 			write(connfd[i], sendBuff, SIZE);
@@ -144,6 +147,13 @@ void join_group( string gid, int i)
 		}
 		else
 		{
+
+			ofstream fout(".group/pending_request", ios::app);
+			string groupowner, user = user_active_inverse[connfd[i]];
+			ifstream fin(grp.c_str(), ios::in);
+			getline(fin, groupowner);
+			fout << user << " " << gid << " " << groupowner << "\n";
+
 			strcpy(sendBuff, "Owner Inactive\n");
 			write(connfd[i], sendBuff, SIZE);	
 		}
@@ -190,6 +200,65 @@ void leave_group( string gid, int i)
 		write(connfd[i], sendBuff, SIZE);
 		
 	}
+}
+
+void list_requests(string gid, string username, int i)
+{
+	string grp = ".group/" + gid;
+	ifstream f(grp.c_str());
+	string grpowner;
+	if(f.good())
+	{
+		getline(f, grpowner);
+		if( !(grpowner == username))
+		{
+			strcpy(sendBuff, "Group Access Denied\n");
+		}
+		else
+		{
+			string str, groupname, send, groupowner, requesteduser;
+			char *ptr, delim[] = " ";
+			ifstream fin(".group/pending_request", ios::in);
+			while(fin)
+			{
+				getline(fin, str);
+				if(str.size() == 0)
+					continue;
+				char arr[100];
+				strcpy( arr, str.c_str());
+				//cout << str << " xx " << arr << "aaaaa\n";
+				
+				ptr = strtok( arr, delim);
+				requesteduser = string(ptr);
+
+				ptr = strtok( NULL, delim);
+				groupname = string(ptr);
+
+				ptr = strtok( NULL, delim);
+				groupowner = string(ptr);
+				
+				//cout << requesteduser << " " << groupowner << " " << groupname << "\n";
+				if(groupowner.compare(username) == 0 && groupname.compare(gid) == 0)
+				{
+					send = requesteduser + " " + gid + "\n";
+					strcpy(sendBuff, send.c_str());
+					write(connfd[i], sendBuff, SIZE);
+				}
+			}
+			fin.close();
+			
+		}
+	}
+	else
+	{
+		strcpy(sendBuff, "No Group Exist\n");
+		write(connfd[i], sendBuff, SIZE);
+	}
+}
+
+void accept_request(string gid, string username, string userjoining, int i)
+{
+
 }
 
 void upload_file(string filepath, string gid, string hash, int i)
@@ -411,9 +480,9 @@ void *readFromPeer(void *parameter)
 		{
 			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
 			{
-				string gid = ".group/";
+				string gid;;
 				ptr = strtok(NULL, delim);
-				gid += string(ptr);
+				gid = string(ptr);
 				gid = gid.substr(0, gid.size()-1);
 				join_group(gid, i);
 			}
@@ -562,6 +631,48 @@ void *readFromPeer(void *parameter)
 				write(connfd[i], sendBuff, SIZE);
 			}
 		}
+		else if(strcmp(ptr, "list_requests") == 0)
+		{ 
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
+			{
+				string gid, username;
+				username = user_active_inverse[connfd[i]];
+
+				ptr = strtok(NULL, delim);
+				gid = string(ptr);
+				gid = gid.substr(0, gid.size()-1);
+
+				list_requests(gid, username, i);
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
+			}
+		}
+		else if(strcmp(ptr, "accept_request") == 0)
+		{ 
+			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
+			{
+				string gid, username, userjoining;
+				username = user_active_inverse[connfd[i]];
+
+				ptr = strtok(NULL, delim);
+				gid = string(ptr);
+
+				ptr = strtok(NULL, delim);
+				userjoining = string(ptr);
+				
+				userjoining = userjoining.substr(0, userjoining.size()-1);
+
+				accept_request(gid, username, userjoining, i);
+			}
+			else
+			{
+				strcpy(sendBuff, "Enter Login Details\n");
+				write(connfd[i], sendBuff, SIZE);
+			}
+		}
 		else if(strcmp(ptr, "logout\n") == 0)
 		{
 			if(user_active_inverse.find(connfd[i]) != user_active_inverse.end() )
@@ -573,6 +684,11 @@ void *readFromPeer(void *parameter)
 				strcpy(sendBuff, "Enter Login Details\n");
 				write(connfd[i], sendBuff, SIZE);
 			}
+		}
+		else
+		{
+			strcpy(sendBuff, "Wrong Command\n");
+			write(connfd[i], sendBuff, SIZE);
 		}
 		memset(sendBuff, '\0', SIZE);
 		memset(readBuff, '\0', SIZE);
